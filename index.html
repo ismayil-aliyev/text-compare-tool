@@ -87,7 +87,10 @@
             <div class="flex flex-col h-full bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div class="bg-slate-100/50 border-b border-slate-200 px-4 py-2 font-semibold text-sm text-slate-700 flex justify-between">
                     <span>Original Text</span>
-                    <button onclick="clearText('input-original')" class="text-slate-400 hover:text-red-500 transition-colors">Clear</button>
+                    <div class="flex gap-4">
+                        <button onclick="cleanText('input-original')" class="text-blue-500 hover:text-blue-600 transition-colors" title="Fix PDF line breaks and hyphens">Clean PDF</button>
+                        <button onclick="clearText('input-original')" class="text-slate-400 hover:text-red-500 transition-colors">Clear</button>
+                    </div>
                 </div>
                 <textarea id="input-original" class="flex-1 w-full p-4 resize-none text-slate-700 leading-relaxed" placeholder="Paste the original legislative text here..."></textarea>
             </div>
@@ -95,18 +98,22 @@
             <div class="flex flex-col h-full bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div class="bg-slate-100/50 border-b border-slate-200 px-4 py-2 font-semibold text-sm text-slate-700 flex justify-between">
                     <span>Modified Text</span>
-                    <button onclick="clearText('input-modified')" class="text-slate-400 hover:text-red-500 transition-colors">Clear</button>
+                    <div class="flex gap-4">
+                        <button onclick="cleanText('input-modified')" class="text-blue-500 hover:text-blue-600 transition-colors" title="Fix PDF line breaks and hyphens">Clean PDF</button>
+                        <button onclick="clearText('input-modified')" class="text-slate-400 hover:text-red-500 transition-colors">Clear</button>
+                    </div>
                 </div>
                 <textarea id="input-modified" class="flex-1 w-full p-4 resize-none text-slate-700 leading-relaxed" placeholder="Paste the modified legislative text here..."></textarea>
             </div>
         </div>
 
         <!-- Controls Area -->
-        <div class="flex justify-center shrink-0 py-2">
+        <div class="flex justify-center shrink-0 py-2 flex-col items-center gap-2">
             <button id="compare-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-8 rounded-lg shadow-md shadow-blue-500/20 transition-all active:scale-95 flex items-center gap-2">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
                 Compare Documents
             </button>
+            <span class="text-xs text-slate-500">Whitespace (spaces, line breaks) and specific punctuation ( , ; : ) differences are ignored.</span>
         </div>
 
         <!-- Output Area (Bottom Half) -->
@@ -190,18 +197,34 @@
                     const textNode1 = document.createTextNode(part.value);
                     const textNode2 = document.createTextNode(part.value);
 
+                    // Check if the change is JUST spaces, linebreaks, or specific punctuation (, ; :)
+                    // \s matches spaces, tabs, and line breaks.
+                    const isIgnorableChange = /^[\s,;:]+$/.test(part.value);
+
                     if (part.added) {
-                        // Added text only shows on the right (Modified Document)
-                        const span = document.createElement('span');
-                        span.className = 'highlight-add';
-                        span.appendChild(textNode2);
-                        fragModified.appendChild(span);
+                        if (isIgnorableChange) {
+                            // If it's just spacing/punctuation we want to ignore, don't highlight it.
+                            // Simply append it to the modified document so the structure remains intact.
+                            fragModified.appendChild(textNode2);
+                        } else {
+                            // Added text only shows on the right (Modified Document) with highlight
+                            const span = document.createElement('span');
+                            span.className = 'highlight-add';
+                            span.appendChild(textNode2);
+                            fragModified.appendChild(span);
+                        }
                     } else if (part.removed) {
-                        // Removed text only shows on the left (Original Document)
-                        const span = document.createElement('span');
-                        span.className = 'highlight-remove';
-                        span.appendChild(textNode1);
-                        fragOriginal.appendChild(span);
+                        if (isIgnorableChange) {
+                            // If ignored, don't show the red strike-through. 
+                            // Simply append it to the original document.
+                            fragOriginal.appendChild(textNode1);
+                        } else {
+                            // Removed text only shows on the left (Original Document) with highlight
+                            const span = document.createElement('span');
+                            span.className = 'highlight-remove';
+                            span.appendChild(textNode1);
+                            fragOriginal.appendChild(span);
+                        }
                     } else {
                         // Unchanged text appears on both sides to provide context
                         fragOriginal.appendChild(textNode1);
@@ -218,6 +241,20 @@
         function clearText(elementId) {
             document.getElementById(elementId).value = '';
             document.getElementById(elementId).focus();
+        }
+
+        // Helper function to clean up PDF copy-paste artifacts
+        function cleanText(elementId) {
+            const el = document.getElementById(elementId);
+            let text = el.value;
+            
+            // 1. Remove hyphens at the end of a line (soft hyphens from PDFs)
+            text = text.replace(/-\r?\n/g, '');
+            // 2. Replace single newlines with a space (preserves double newlines for paragraphs)
+            text = text.replace(/([^\r\n])\r?\n([^\r\n])/g, '$1 $2');
+            
+            el.value = text;
+            el.focus();
         }
     </script>
 </body>
