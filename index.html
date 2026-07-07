@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Legislative Text Compare Tool</title>
+    <!-- Tailwind CSS for modern, responsive styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- jsdiff library for accurate text diffing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsdiff/5.1.0/diff.min.js"></script>
+    
+    <style>
+        /* Preserves whitespace and line breaks for legislative formatting */
+        .pre-wrap {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: inherit;
+        }
+
+        /* Custom scrollbars to look clean */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* Highlight styles */
+        .highlight-add {
+            background-color: #bbf7d0; /* Tailwind green-200 */
+            color: #14532d; /* Tailwind green-900 */
+            border-radius: 3px;
+            padding: 0.125rem 0;
+            font-weight: 500;
+        }
+        
+        .highlight-remove {
+            background-color: #fecaca; /* Tailwind red-200 */
+            color: #7f1d1d; /* Tailwind red-900 */
+            text-decoration: line-through;
+            border-radius: 3px;
+            padding: 0.125rem 0;
+        }
+        
+        /* Subtle focus states for textareas */
+        textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 h-screen flex flex-col font-sans overflow-hidden">
+
+    <!-- Header Section -->
+    <header class="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shrink-0">
+        <div class="flex items-center gap-3">
+            <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            <h1 class="text-xl font-bold text-slate-900">Legislative Text Comparator</h1>
+        </div>
+        <div class="flex items-center gap-4 text-sm font-medium">
+            <div class="flex items-center gap-2">
+                <span class="w-4 h-4 bg-red-200 rounded block"></span>
+                <span class="text-slate-600">Deleted</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="w-4 h-4 bg-green-200 rounded block"></span>
+                <span class="text-slate-600">Added</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="flex-1 p-6 flex flex-col gap-4 overflow-hidden">
+        
+        <!-- Input Area (Top Half) -->
+        <div class="grid grid-cols-2 gap-6 h-2/5 shrink-0">
+            <div class="flex flex-col h-full bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="bg-slate-100/50 border-b border-slate-200 px-4 py-2 font-semibold text-sm text-slate-700 flex justify-between">
+                    <span>Original Text</span>
+                    <button onclick="clearText('input-original')" class="text-slate-400 hover:text-red-500 transition-colors">Clear</button>
+                </div>
+                <textarea id="input-original" class="flex-1 w-full p-4 resize-none text-slate-700 leading-relaxed" placeholder="Paste the original legislative text here..."></textarea>
+            </div>
+
+            <div class="flex flex-col h-full bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="bg-slate-100/50 border-b border-slate-200 px-4 py-2 font-semibold text-sm text-slate-700 flex justify-between">
+                    <span>Modified Text</span>
+                    <button onclick="clearText('input-modified')" class="text-slate-400 hover:text-red-500 transition-colors">Clear</button>
+                </div>
+                <textarea id="input-modified" class="flex-1 w-full p-4 resize-none text-slate-700 leading-relaxed" placeholder="Paste the modified legislative text here..."></textarea>
+            </div>
+        </div>
+
+        <!-- Controls Area -->
+        <div class="flex justify-center shrink-0 py-2">
+            <button id="compare-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-8 rounded-lg shadow-md shadow-blue-500/20 transition-all active:scale-95 flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+                Compare Documents
+            </button>
+        </div>
+
+        <!-- Output Area (Bottom Half) -->
+        <div class="grid grid-cols-2 gap-6 flex-1 min-h-0">
+            <div class="flex flex-col h-full bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="bg-slate-100/50 border-b border-slate-200 px-4 py-2 font-semibold text-sm text-slate-700">
+                    Original Document (with Deletions)
+                </div>
+                <div id="output-original" class="flex-1 p-4 overflow-y-auto pre-wrap text-slate-700 leading-relaxed bg-slate-50">
+                    <span class="text-slate-400 italic">Results will appear here after clicking Compare...</span>
+                </div>
+            </div>
+
+            <div class="flex flex-col h-full bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="bg-slate-100/50 border-b border-slate-200 px-4 py-2 font-semibold text-sm text-slate-700">
+                    Modified Document (with Additions)
+                </div>
+                <div id="output-modified" class="flex-1 p-4 overflow-y-auto pre-wrap text-slate-700 leading-relaxed bg-slate-50">
+                    <span class="text-slate-400 italic">Results will appear here after clicking Compare...</span>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const btnCompare = document.getElementById('compare-btn');
+            const inputOriginal = document.getElementById('input-original');
+            const inputModified = document.getElementById('input-modified');
+            const outputOriginal = document.getElementById('output-original');
+            const outputModified = document.getElementById('output-modified');
+
+            // Sync scrolling between the two output windows
+            let isSyncingLeftScroll = false;
+            let isSyncingRightScroll = false;
+
+            outputOriginal.addEventListener('scroll', function(e) {
+                if (!isSyncingLeftScroll) {
+                    isSyncingRightScroll = true;
+                    // Calculate percentage scrolled to map accurately if heights slightly differ
+                    const percentage = this.scrollTop / (this.scrollHeight - this.clientHeight);
+                    outputModified.scrollTop = percentage * (outputModified.scrollHeight - outputModified.clientHeight);
+                }
+                isSyncingLeftScroll = false;
+            });
+
+            outputModified.addEventListener('scroll', function(e) {
+                if (!isSyncingRightScroll) {
+                    isSyncingLeftScroll = true;
+                    const percentage = this.scrollTop / (this.scrollHeight - this.clientHeight);
+                    outputOriginal.scrollTop = percentage * (outputOriginal.scrollHeight - outputOriginal.clientHeight);
+                }
+                isSyncingRightScroll = false;
+            });
+
+            // Compare Logic
+            btnCompare.addEventListener('click', () => {
+                const text1 = inputOriginal.value;
+                const text2 = inputModified.value;
+
+                if (!text1 && !text2) {
+                    outputOriginal.innerHTML = '<span class="text-slate-400 italic">Please enter text to compare.</span>';
+                    outputModified.innerHTML = '<span class="text-slate-400 italic">Please enter text to compare.</span>';
+                    return;
+                }
+
+                // DiffWordsWithSpace preserves spaces and newlines perfectly
+                const diffParts = Diff.diffWordsWithSpace(text1, text2);
+
+                // Clear previous outputs
+                outputOriginal.innerHTML = '';
+                outputModified.innerHTML = '';
+
+                // Fragment builders for better performance
+                const fragOriginal = document.createDocumentFragment();
+                const fragModified = document.createDocumentFragment();
+
+                diffParts.forEach(part => {
+                    // Create text nodes
+                    const textNode1 = document.createTextNode(part.value);
+                    const textNode2 = document.createTextNode(part.value);
+
+                    if (part.added) {
+                        // Added text only shows on the right (Modified Document)
+                        const span = document.createElement('span');
+                        span.className = 'highlight-add';
+                        span.appendChild(textNode2);
+                        fragModified.appendChild(span);
+                    } else if (part.removed) {
+                        // Removed text only shows on the left (Original Document)
+                        const span = document.createElement('span');
+                        span.className = 'highlight-remove';
+                        span.appendChild(textNode1);
+                        fragOriginal.appendChild(span);
+                    } else {
+                        // Unchanged text appears on both sides to provide context
+                        fragOriginal.appendChild(textNode1);
+                        fragModified.appendChild(textNode2);
+                    }
+                });
+
+                outputOriginal.appendChild(fragOriginal);
+                outputModified.appendChild(fragModified);
+            });
+        });
+
+        // Helper function to clear textareas
+        function clearText(elementId) {
+            document.getElementById(elementId).value = '';
+            document.getElementById(elementId).focus();
+        }
+    </script>
+</body>
+</html>
