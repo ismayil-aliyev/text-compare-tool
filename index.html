@@ -51,6 +51,13 @@
             padding: 0.125rem 0;
         }
         
+        /* Active sync highlight (mimics native selection for synced words) */
+        .sync-word-active {
+            background-color: #bfdbfe; /* Tailwind blue-200 */
+            color: #1e3a8a; /* Tailwind blue-900 */
+            border-radius: 2px;
+        }
+
         /* Subtle focus states for textareas */
         textarea:focus {
             outline: none;
@@ -192,6 +199,8 @@
                 const fragOriginal = document.createDocumentFragment();
                 const fragModified = document.createDocumentFragment();
 
+                let syncCounter = 0; // Track unchanged words for cross-highlighting
+
                 diffParts.forEach(part => {
                     // Create text nodes
                     const textNode1 = document.createTextNode(part.value);
@@ -227,13 +236,84 @@
                         }
                     } else {
                         // Unchanged text appears on both sides to provide context
-                        fragOriginal.appendChild(textNode1);
-                        fragModified.appendChild(textNode2);
+                        // Tokenize by words/spaces to allow cross-highlighting
+                        const tokens = part.value.split(/([\s,;:]+)/);
+                        tokens.forEach(token => {
+                            if (!token) return;
+                            
+                            if (/^[\s,;:]+$/.test(token)) {
+                                // Keep whitespaces/punctuation as plain text nodes
+                                fragOriginal.appendChild(document.createTextNode(token));
+                                fragModified.appendChild(document.createTextNode(token));
+                            } else {
+                                // Wrap words in spans with matching sync IDs
+                                const id = `sync-${syncCounter++}`;
+                                
+                                const span1 = document.createElement('span');
+                                span1.textContent = token;
+                                span1.className = 'sync-word';
+                                span1.dataset.syncId = id;
+                                
+                                const span2 = document.createElement('span');
+                                span2.textContent = token;
+                                span2.className = 'sync-word';
+                                span2.dataset.syncId = id;
+
+                                fragOriginal.appendChild(span1);
+                                fragModified.appendChild(span2);
+                            }
+                        });
                     }
                 });
 
                 outputOriginal.appendChild(fragOriginal);
                 outputModified.appendChild(fragModified);
+            });
+
+            // Cross-highlighting logic on selection change
+            document.addEventListener('selectionchange', () => {
+                const selection = window.getSelection();
+                
+                // Clear all existing custom highlights
+                document.querySelectorAll('.sync-word-active').forEach(el => {
+                    el.classList.remove('sync-word-active');
+                });
+
+                if (!selection.rangeCount || selection.isCollapsed) return;
+
+                const anchorNode = selection.anchorNode;
+                if (!anchorNode) return;
+
+                let activeContainer = null;
+                let targetContainer = null;
+
+                if (outputOriginal.contains(anchorNode)) {
+                    activeContainer = outputOriginal;
+                    targetContainer = outputModified;
+                } else if (outputModified.contains(anchorNode)) {
+                    activeContainer = outputModified;
+                    targetContainer = outputOriginal;
+                }
+
+                if (!activeContainer) return;
+
+                // Find intersecting sync-words
+                const selectedIds = new Set();
+                const syncWords = activeContainer.querySelectorAll('.sync-word');
+                
+                syncWords.forEach(word => {
+                    if (selection.containsNode(word, true)) {
+                        selectedIds.add(word.dataset.syncId);
+                    }
+                });
+
+                // Highlight matches in the opposite container
+                selectedIds.forEach(id => {
+                    const pairedWord = targetContainer.querySelector(`.sync-word[data-sync-id="${id}"]`);
+                    if (pairedWord) {
+                        pairedWord.classList.add('sync-word-active');
+                    }
+                });
             });
         });
 
